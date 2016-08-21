@@ -1,4 +1,5 @@
-﻿using Npgsql;
+﻿using System;
+using Npgsql;
 
 namespace IdentityServer3.PostgreSQL.SchemaGenerator
 {
@@ -79,7 +80,7 @@ namespace IdentityServer3.PostgreSQL.SchemaGenerator
                         and c.relkind = 'r'-- only tables(?)
                 );";
 
-                var exists = existsCommand.ExecuteScalar() != null;
+                var exists = Convert.ToBoolean(existsCommand.ExecuteScalar());
 
                 connection.Close();
 
