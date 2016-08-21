@@ -163,7 +163,7 @@ namespace IdentityServer3.PostgreSQL.Stores
 
             using (var connection = new NpgsqlConnection(PostgreSqlServiceOptions.ConnectionString))
             {
-                return (await connection.QueryAsync<StoredToken>(sql, new {key, tokenType = TokenType.RefreshToken})).SingleOrDefault();
+                return (await connection.QueryAsync<StoredToken>(sql, new {key, tokenType = TokenType})).SingleOrDefault();
             }
         }
     }
