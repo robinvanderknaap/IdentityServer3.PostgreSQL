@@ -13,28 +13,23 @@ namespace IdentityServer3.PostgreSQL.SchemaGenerator
 
         public void GenerateSchema(bool recreateIfExists)
         {
-            var databaseExists = DatabaseExists(_connectionString);
-
-            if (databaseExists && !recreateIfExists)
+            if (!TableExists("public", "tokens") || recreateIfExists)
             {
-                return;
+                CreateTokenTable();
             }
+        }
 
-            if (databaseExists)
-            {
-                DropDatabase(_connectionString);
-            }
-
-            CreateDatabase(_connectionString);
-
-            var builder = new NpgsqlConnectionStringBuilder(_connectionString);
-
+        private void CreateTokenTable()
+        {
             // Create connection to database server
-            using (var connection = new NpgsqlConnection(builder.ConnectionString))
+            using (var connection = new NpgsqlConnection(_connectionString))
             {
                 connection.Open();
 
-                // Create schema
+                var dropCommand = connection.CreateCommand();
+                dropCommand.CommandText = @"drop table if exists ""tokens""";
+                dropCommand.ExecuteNonQuery();
+
                 var createCommand = connection.CreateCommand();
                 createCommand.CommandText = @"
                     -- Tokens
@@ -57,79 +52,38 @@ namespace IdentityServer3.PostgreSQL.SchemaGenerator
                       USING btree
                       (subjectid COLLATE pg_catalog.""default"", clientid COLLATE pg_catalog.""default"", token_type);
                 ";
-                
+
                 createCommand.ExecuteNonQuery();
 
                 connection.Close();
             }
-
-
         }
 
-        private bool DatabaseExists(string connectionString)
+        private bool TableExists(string schemaName, string tableName)
         {
-            var builder = new NpgsqlConnectionStringBuilder(connectionString);
-            var databaseName = builder.Database;
-            builder.Database = "postgres";
-
-            using (var connection = new NpgsqlConnection(builder.ConnectionString))
+            using (var connection = new NpgsqlConnection(_connectionString))
             {
                 connection.Open();
 
                 var existsCommand = connection.CreateCommand();
-                existsCommand.CommandText = $"SELECT 1 from pg_database WHERE datname='{databaseName}'";
+                existsCommand.CommandText = $@"
+                    select exists (
+                        select 1
+                    from 
+                        pg_catalog.pg_class c
+                    join 
+                        pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                    where 
+                        n.nspname = '{schemaName}'
+                        and c.relname = '{tableName}'
+                        and c.relkind = 'r'-- only tables(?)
+                );";
 
                 var exists = existsCommand.ExecuteScalar() != null;
 
                 connection.Close();
 
                 return exists;
-            }
-        }
-
-        private void CreateDatabase(string connectionString)
-        {
-            DropDatabase(connectionString);
-
-            var builder = new NpgsqlConnectionStringBuilder(connectionString);
-            var databaseName = builder.Database;
-            builder.Database = "postgres";
-
-            using (var connection = new NpgsqlConnection(builder.ConnectionString))
-            {
-                connection.Open();
-
-                var createCommand = connection.CreateCommand();
-                createCommand.CommandText = $@"CREATE DATABASE ""{databaseName}"" ENCODING = 'UTF8'";
-                createCommand.ExecuteNonQuery();
-
-                connection.Close();
-            }
-        }
-
-        private static void DropDatabase(string connectionString)
-        {
-            var builder = new NpgsqlConnectionStringBuilder(connectionString);
-            var databaseName = builder.Database;
-            builder.Database = "postgres";
-
-            using (var connection = new NpgsqlConnection(builder.ConnectionString))
-            {
-                connection.Open();
-
-                var killConnectionsCommand = connection.CreateCommand();
-                killConnectionsCommand.CommandText =
-                    $@"
-                    SELECT pg_terminate_backend(pg_stat_activity.pid)
-                    FROM pg_stat_activity
-                    WHERE pg_stat_activity.datname = '{databaseName}' AND pid <> pg_backend_pid();";
-                killConnectionsCommand.ExecuteNonQuery();
-
-                var dropCommand = connection.CreateCommand();
-                dropCommand.CommandText = $@"drop database if exists ""{databaseName}""";
-                dropCommand.ExecuteNonQuery();
-
-                connection.Close();
             }
         }
     }
